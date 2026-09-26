@@ -53,7 +53,18 @@ class FrigatePanel extends HTMLElement {
   _render() {
     const style = document.createElement("style");
     style.textContent = `
-      :host { display: block; height: 100%; }
+      /*
+       * ha-panel-custom and partial-panel-resolver, both directly above us in
+       * the tree, never declare a height on themselves -- only display:block
+       * and padding. A percentage height has nothing definite to resolve
+       * against there and collapses to the browser's ~150px default iframe
+       * size. Home Assistant's own iframe-panel code hits the same problem
+       * and works around it the same way: viewport units instead of a
+       * percentage chain. 100dvh (falls back to 100vh where unsupported)
+       * accounts for mobile browser chrome showing/hiding on scroll, which
+       * plain vh does not.
+       */
+      :host { display: block; height: 100vh; height: 100dvh; }
       .wrap { position: relative; height: 100%; }
       iframe {
         display: block;

@@ -24,7 +24,7 @@ DEFAULT_SIDEBAR_TITLE: Final = "Frigate"
 
 # Sidebar / frontend. Bump PANEL_JS_VERSION whenever frigate-panel.js changes
 # so browsers do not keep serving a stale module from cache.
-PANEL_JS_VERSION: Final = "1"
+PANEL_JS_VERSION: Final = "2"
 PANEL_URL_PATH: Final = "frigate-panel"
 PANEL_ICON: Final = "mdi:cctv"
 PANEL_WEBCOMPONENT: Final = "frigate-panel"
