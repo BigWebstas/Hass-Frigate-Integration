@@ -11,9 +11,11 @@ from custom_components.frigate_panel.const import (
     CONF_CACHE_SIZE_MB,
     CONF_DIRECT_URL,
     CONF_EVENT_MEDIA_TTL,
+    CONF_SIDEBAR_ICON,
     CONF_SIDEBAR_TITLE,
     CONF_URL,
     CONF_VERIFY_SSL,
+    DEFAULT_SIDEBAR_ICON,
     DOMAIN,
     PANEL_URL_PATH,
 )
@@ -135,3 +137,31 @@ async def test_options_change_the_sidebar_title(hass, setup_entry):
     await hass.async_block_till_done()
 
     assert hass.data[DATA_PANELS][PANEL_URL_PATH].sidebar_title == "Cameras"
+
+
+async def test_default_sidebar_icon(hass, setup_entry):
+    """A fresh entry gets a sensible icon without being asked."""
+    assert hass.data[DATA_PANELS][PANEL_URL_PATH].sidebar_icon == DEFAULT_SIDEBAR_ICON
+
+
+async def test_options_change_the_sidebar_icon(hass, setup_entry):
+    """Picking a new icon should be visible in the sidebar without a restart."""
+    result = await hass.config_entries.options.async_init(setup_entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SIDEBAR_ICON: "mdi:cctv-off"}
+    )
+    await hass.async_block_till_done()
+
+    assert hass.data[DATA_PANELS][PANEL_URL_PATH].sidebar_icon == "mdi:cctv-off"
+    assert setup_entry.options[CONF_SIDEBAR_ICON] == "mdi:cctv-off"
+
+
+async def test_clearing_the_sidebar_icon_falls_back_to_the_default(hass, setup_entry):
+    """An emptied icon field must not leave the sidebar entry with no icon."""
+    result = await hass.config_entries.options.async_init(setup_entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SIDEBAR_ICON: ""}
+    )
+    await hass.async_block_till_done()
+
+    assert hass.data[DATA_PANELS][PANEL_URL_PATH].sidebar_icon == DEFAULT_SIDEBAR_ICON

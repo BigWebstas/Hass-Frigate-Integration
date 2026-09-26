@@ -56,6 +56,7 @@ Every proxied response carries `X-Frigate-Panel-Cache: hit`, `miss` or
 | Option | Default | Notes |
 |---|---|---|
 | Sidebar name | `Frigate` | |
+| Sidebar icon | `mdi:cctv` | Any [Material Design Icon](https://pictogrammers.com/library/mdi/). |
 | Load Frigate directly when possible | on | See the caveat below. |
 | Direct Frigate URL | your Frigate URL | The address *browsers* use on your LAN. |
 | Cache size limit | 512 MB | Oldest entries evicted first. `0` disables the cache. |

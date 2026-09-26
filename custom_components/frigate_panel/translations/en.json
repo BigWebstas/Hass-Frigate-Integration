@@ -32,6 +32,7 @@
           "cache_size_mb": "Cache size limit (MB)",
           "direct_url": "Direct Frigate URL",
           "event_media_ttl": "Cache thumbnails and snapshots for (seconds)",
+          "sidebar_icon": "Sidebar icon",
           "sidebar_title": "Sidebar name"
         },
         "data_description": {
@@ -39,6 +40,7 @@
           "cache_size_mb": "Oldest entries are dropped once the cache exceeds this. Set to 0 to cache nothing.",
           "direct_url": "The address your browsers use on the local network. Usually the same as the Frigate URL.",
           "event_media_ttl": "Frigate sends no cache headers for event images, so this is what stops your browser re-fetching every thumbnail. Keep it short enough that in-progress events still refresh.",
+          "sidebar_icon": "The icon shown next to the sidebar name.",
           "sidebar_title": "The name shown in the Home Assistant sidebar."
         },
         "description": "Caching only ever applies to things that do not change. Live view and recordings are always passed straight through."

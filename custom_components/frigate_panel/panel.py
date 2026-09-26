@@ -18,10 +18,11 @@ from homeassistant.components.http import StaticPathConfig
 from .const import (
     CONF_ALLOW_DIRECT,
     CONF_DIRECT_URL,
+    CONF_SIDEBAR_ICON,
     CONF_SIDEBAR_TITLE,
     DEFAULT_ALLOW_DIRECT,
+    DEFAULT_SIDEBAR_ICON,
     DEFAULT_SIDEBAR_TITLE,
-    PANEL_ICON,
     PANEL_JS_VERSION,
     PANEL_URL_PATH,
     PANEL_WEBCOMPONENT,
@@ -61,7 +62,8 @@ async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
         frontend_url_path=PANEL_URL_PATH,
         webcomponent_name=PANEL_WEBCOMPONENT,
         sidebar_title=options.get(CONF_SIDEBAR_TITLE, DEFAULT_SIDEBAR_TITLE),
-        sidebar_icon=PANEL_ICON,
+        sidebar_icon=options.get(CONF_SIDEBAR_ICON, DEFAULT_SIDEBAR_ICON)
+        or DEFAULT_SIDEBAR_ICON,
         module_url=f"{STATIC_PATH}/frigate-panel.js?v={PANEL_JS_VERSION}",
         embed_iframe=False,
         require_admin=False,

@@ -16,17 +16,18 @@ CONF_ALLOW_DIRECT: Final = "allow_direct"
 CONF_CACHE_SIZE_MB: Final = "cache_size_mb"
 CONF_EVENT_MEDIA_TTL: Final = "event_media_ttl"
 CONF_SIDEBAR_TITLE: Final = "sidebar_title"
+CONF_SIDEBAR_ICON: Final = "sidebar_icon"
 
 DEFAULT_ALLOW_DIRECT: Final = True
 DEFAULT_CACHE_SIZE_MB: Final = 512
 DEFAULT_EVENT_MEDIA_TTL: Final = 600
 DEFAULT_SIDEBAR_TITLE: Final = "Frigate"
+DEFAULT_SIDEBAR_ICON: Final = "mdi:cctv"
 
 # Sidebar / frontend. Bump PANEL_JS_VERSION whenever frigate-panel.js changes
 # so browsers do not keep serving a stale module from cache.
 PANEL_JS_VERSION: Final = "2"
 PANEL_URL_PATH: Final = "frigate-panel"
-PANEL_ICON: Final = "mdi:cctv"
 PANEL_WEBCOMPONENT: Final = "frigate-panel"
 STATIC_PATH: Final = "/frigate_panel_static"
 
