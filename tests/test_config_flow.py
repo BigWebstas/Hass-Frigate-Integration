@@ -11,6 +11,7 @@ from custom_components.frigate_panel.const import (
     CONF_CACHE_SIZE_MB,
     CONF_DIRECT_URL,
     CONF_EVENT_MEDIA_TTL,
+    CONF_SHOW_TOOLBAR,
     CONF_SIDEBAR_ICON,
     CONF_SIDEBAR_TITLE,
     CONF_URL,
@@ -102,6 +103,7 @@ async def test_options_round_trip(hass, setup_entry):
         result["flow_id"],
         {
             CONF_SIDEBAR_TITLE: "Cameras",
+            CONF_SHOW_TOOLBAR: False,
             CONF_ALLOW_DIRECT: False,
             CONF_DIRECT_URL: "http://192.168.1.10:5000/",
             CONF_CACHE_SIZE_MB: 128,
@@ -112,6 +114,7 @@ async def test_options_round_trip(hass, setup_entry):
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert setup_entry.options[CONF_SIDEBAR_TITLE] == "Cameras"
+    assert setup_entry.options[CONF_SHOW_TOOLBAR] is False
     assert setup_entry.options[CONF_ALLOW_DIRECT] is False
     # Normalised on the way in, like the setup URL.
     assert setup_entry.options[CONF_DIRECT_URL] == "http://192.168.1.10:5000"
@@ -165,3 +168,15 @@ async def test_clearing_the_sidebar_icon_falls_back_to_the_default(hass, setup_e
     await hass.async_block_till_done()
 
     assert hass.data[DATA_PANELS][PANEL_URL_PATH].sidebar_icon == DEFAULT_SIDEBAR_ICON
+
+
+async def test_toolbar_can_be_turned_off_for_kiosk_displays(hass, setup_entry):
+    """A wall-mounted camera dashboard may want zero Home Assistant chrome."""
+    result = await hass.config_entries.options.async_init(setup_entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SHOW_TOOLBAR: False}
+    )
+    await hass.async_block_till_done()
+
+    panel = hass.data[DATA_PANELS][PANEL_URL_PATH]
+    assert panel.config["show_toolbar"] is False

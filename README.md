@@ -57,6 +57,7 @@ Every proxied response carries `X-Frigate-Panel-Cache: hit`, `miss` or
 |---|---|---|
 | Sidebar name | `Frigate` | |
 | Sidebar icon | `mdi:cctv` | Any [Material Design Icon](https://pictogrammers.com/library/mdi/). |
+| Show a way back to Home Assistant | on | A small header with a menu button, so you can reopen the sidebar. Turn off for a fully immersive kiosk display. |
 | Load Frigate directly when possible | on | See the caveat below. |
 | Direct Frigate URL | your Frigate URL | The address *browsers* use on your LAN. |
 | Cache size limit | 512 MB | Oldest entries evicted first. `0` disables the cache. |
@@ -72,6 +73,28 @@ plain HTTP on your LAN, the panel detects that and stays on the proxy.
 Direct loading works when Home Assistant is HTTP on the LAN, or when Frigate
 has a valid HTTPS certificate. Otherwise you get the proxy, which is the safe
 default and still cached.
+
+### The "way back" toolbar
+
+Frigate's own UI has no link back to Home Assistant, and a custom panel like
+this one gets the whole viewport with none of Home Assistant's own chrome
+around it — so on a phone, where the sidebar is a hidden drawer rather than a
+permanent column, there was no way out of the panel except closing the tab.
+
+The toolbar adds a small header with Home Assistant's own menu button, which
+reopens the sidebar. It reuses Home Assistant's `<hass-subpage>` component —
+the same one its built-in `panel_iframe:` uses — rather than a bar built from
+scratch here.
+
+One tradeoff worth knowing: Home Assistant only loads that component's code
+when some panel that uses it has already been visited in the session. To make
+it available even on a session that goes straight from login to this panel,
+the frontend nudges Home Assistant's router to load it, via the same private
+API [lovelylain/hass_ingress](https://github.com/lovelylain/hass_ingress) uses
+for its own `ui_mode: toolbar`. It's not a public, guaranteed-stable API — if
+a future Home Assistant release changes it, the toolbar just stops appearing
+rather than breaking the panel; toggle it off if that ever happens and you'd
+rather not see the gap.
 
 ## How the authentication works
 

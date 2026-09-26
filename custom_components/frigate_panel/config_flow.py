@@ -23,6 +23,7 @@ from .const import (
     CONF_CACHE_SIZE_MB,
     CONF_DIRECT_URL,
     CONF_EVENT_MEDIA_TTL,
+    CONF_SHOW_TOOLBAR,
     CONF_SIDEBAR_ICON,
     CONF_SIDEBAR_TITLE,
     CONF_URL,
@@ -30,6 +31,7 @@ from .const import (
     DEFAULT_ALLOW_DIRECT,
     DEFAULT_CACHE_SIZE_MB,
     DEFAULT_EVENT_MEDIA_TTL,
+    DEFAULT_SHOW_TOOLBAR,
     DEFAULT_SIDEBAR_ICON,
     DEFAULT_SIDEBAR_TITLE,
     DOMAIN,
@@ -128,6 +130,10 @@ class FrigatePanelOptionsFlow(OptionsFlowWithReload):
                     CONF_SIDEBAR_ICON,
                     default=current.get(CONF_SIDEBAR_ICON, DEFAULT_SIDEBAR_ICON),
                 ): selector.IconSelector(),
+                vol.Optional(
+                    CONF_SHOW_TOOLBAR,
+                    default=current.get(CONF_SHOW_TOOLBAR, DEFAULT_SHOW_TOOLBAR),
+                ): bool,
                 vol.Optional(
                     CONF_ALLOW_DIRECT,
                     default=current.get(CONF_ALLOW_DIRECT, DEFAULT_ALLOW_DIRECT),

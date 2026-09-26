@@ -33,6 +33,8 @@ async def test_panel_appears_in_the_sidebar(hass, setup_entry):
     assert panel.sidebar_title == "Frigate"
     assert panel.config["proxy_base"] == base(setup_entry)
     assert panel.config["_panel_custom"]["name"] == "frigate-panel"
+    # On by default: Frigate's own UI has no link back to Home Assistant.
+    assert panel.config["show_toolbar"] is True
 
 
 async def test_panel_is_removed_on_unload(hass, setup_entry):

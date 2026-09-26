@@ -33,7 +33,8 @@
           "direct_url": "Direct Frigate URL",
           "event_media_ttl": "Cache thumbnails and snapshots for (seconds)",
           "sidebar_icon": "Sidebar icon",
-          "sidebar_title": "Sidebar name"
+          "sidebar_title": "Sidebar name",
+          "show_toolbar": "Show a way back to Home Assistant"
         },
         "data_description": {
           "allow_direct": "When your browser can reach Frigate itself, load it straight from Frigate instead of through Home Assistant. Does not apply when Home Assistant is on HTTPS and Frigate is on plain HTTP, because browsers block that.",
@@ -41,7 +42,8 @@
           "direct_url": "The address your browsers use on the local network. Usually the same as the Frigate URL.",
           "event_media_ttl": "Frigate sends no cache headers for event images, so this is what stops your browser re-fetching every thumbnail. Keep it short enough that in-progress events still refresh.",
           "sidebar_icon": "The icon shown next to the sidebar name.",
-          "sidebar_title": "The name shown in the Home Assistant sidebar."
+          "sidebar_title": "The name shown in the Home Assistant sidebar.",
+          "show_toolbar": "Adds a small header with a menu button so you can reopen the Home Assistant sidebar from inside Frigate, since Frigate's own UI has no link back. Turn this off for a fully immersive kiosk display."
         },
         "description": "Caching only ever applies to things that do not change. Live view and recordings are always passed straight through."
       }

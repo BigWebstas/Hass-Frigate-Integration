@@ -18,9 +18,11 @@ from homeassistant.components.http import StaticPathConfig
 from .const import (
     CONF_ALLOW_DIRECT,
     CONF_DIRECT_URL,
+    CONF_SHOW_TOOLBAR,
     CONF_SIDEBAR_ICON,
     CONF_SIDEBAR_TITLE,
     DEFAULT_ALLOW_DIRECT,
+    DEFAULT_SHOW_TOOLBAR,
     DEFAULT_SIDEBAR_ICON,
     DEFAULT_SIDEBAR_TITLE,
     PANEL_JS_VERSION,
@@ -74,6 +76,7 @@ async def async_register_panel(hass: HomeAssistant, entry: ConfigEntry) -> None:
             # when that host is reachable from the client too.
             "direct_url": (options.get(CONF_DIRECT_URL) or "").rstrip("/"),
             "allow_direct": options.get(CONF_ALLOW_DIRECT, DEFAULT_ALLOW_DIRECT),
+            "show_toolbar": options.get(CONF_SHOW_TOOLBAR, DEFAULT_SHOW_TOOLBAR),
         },
     )
 
