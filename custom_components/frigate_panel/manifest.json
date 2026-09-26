@@ -1,0 +1,13 @@
+{
+  "domain": "frigate_panel",
+  "name": "Frigate Panel",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["http", "frontend", "panel_custom"],
+  "documentation": "https://github.com/webstas/Hass-Frigate-Integration",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/webstas/Hass-Frigate-Integration/issues",
+  "requirements": ["hass-web-proxy-lib==0.0.8"],
+  "version": "0.1.0"
+}

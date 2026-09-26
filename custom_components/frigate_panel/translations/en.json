@@ -1,0 +1,48 @@
+{
+  "config": {
+    "abort": {
+      "single_instance_allowed": "Frigate Panel is already set up. Change the existing entry instead of adding a second one."
+    },
+    "error": {
+      "cannot_connect": "Home Assistant could not reach Frigate at that address.",
+      "invalid_url": "Enter a full URL including http:// or https://."
+    },
+    "step": {
+      "user": {
+        "data": {
+          "url": "Frigate URL",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "url": "Where Home Assistant can reach Frigate, for example http://192.168.1.10:5000",
+          "verify_ssl": "Turn this off if Frigate uses a self-signed certificate."
+        },
+        "description": "Frigate will be added to your sidebar and proxied through Home Assistant, so it works from anywhere Home Assistant does."
+      }
+    }
+  },
+  "options": {
+    "error": {
+      "invalid_url": "Enter a full URL including http:// or https://."
+    },
+    "step": {
+      "init": {
+        "data": {
+          "allow_direct": "Load Frigate directly when possible",
+          "cache_size_mb": "Cache size limit (MB)",
+          "direct_url": "Direct Frigate URL",
+          "event_media_ttl": "Cache thumbnails and snapshots for (seconds)",
+          "sidebar_title": "Sidebar name"
+        },
+        "data_description": {
+          "allow_direct": "When your browser can reach Frigate itself, load it straight from Frigate instead of through Home Assistant. Does not apply when Home Assistant is on HTTPS and Frigate is on plain HTTP, because browsers block that.",
+          "cache_size_mb": "Oldest entries are dropped once the cache exceeds this. Set to 0 to cache nothing.",
+          "direct_url": "The address your browsers use on the local network. Usually the same as the Frigate URL.",
+          "event_media_ttl": "Frigate sends no cache headers for event images, so this is what stops your browser re-fetching every thumbnail. Keep it short enough that in-progress events still refresh.",
+          "sidebar_title": "The name shown in the Home Assistant sidebar."
+        },
+        "description": "Caching only ever applies to things that do not change. Live view and recordings are always passed straight through."
+      }
+    }
+  }
+}
