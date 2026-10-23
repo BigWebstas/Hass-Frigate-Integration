@@ -1,5 +1,8 @@
 """End-to-end behaviour of the panel, its auth boundary and its cache."""
 
+import asyncio
+import time
+
 import pytest
 from homeassistant.components.frontend import DATA_PANELS
 
@@ -20,6 +23,25 @@ IMMUTABLE = {
 }
 NO_STORE = {"Cache-Control": "no-store", "Content-Type": "application/json"}
 NO_HEADERS_AT_ALL = {"Content-Type": "image/jpeg"}
+
+
+class Clock:
+    """Wall clock for cache ageing, which the HA freezer does not reach."""
+
+    def __init__(self, monkeypatch):
+        """Start from the real time and take over ``time.time``."""
+        self._now = time.time()
+        monkeypatch.setattr(time, "time", lambda: self._now)
+
+    def advance(self, seconds):
+        """Move forward."""
+        self._now += seconds
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Controllable ``time.time``."""
+    return Clock(monkeypatch)
 
 
 def base(entry):
@@ -164,6 +186,74 @@ async def test_event_thumbnail_is_cached_despite_frigate_sending_no_headers(
     assert len(aioclient_mock.mock_calls) == 1
 
 
+async def test_expired_entry_is_revalidated_instead_of_refetched(
+    hass, setup_entry, hass_client, aioclient_mock, clock
+):
+    """A 304 from Frigate renews the entry without sending the body again."""
+    url = f"{FRIGATE_URL}/theme.css"
+    headers = {
+        "Cache-Control": "public, max-age=60",
+        "Content-Type": "text/css",
+        "ETag": '"v1"',
+    }
+    aioclient_mock.get(url, content=b"body{}", headers=headers)
+    client = await hass_client()
+    path = f"{base(setup_entry)}/theme.css"
+    await client.get(path)
+    await hass.async_block_till_done()  # the cache write trails the response
+
+    clock.advance(120)
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(url, status=304, headers=headers)
+
+    renewed = await client.get(path)
+    assert renewed.status == 200
+    assert await renewed.read() == b"body{}"
+    assert aioclient_mock.mock_calls[0][3]["If-None-Match"] == '"v1"'
+
+    # Renewed: the next request is a plain hit.
+    aioclient_mock.clear_requests()
+    again = await client.get(path)
+    assert again.headers[CACHE_HEADER] == "hit"
+    assert not aioclient_mock.mock_calls
+
+
+async def test_changed_entity_replaces_the_stale_entry(
+    hass, setup_entry, hass_client, aioclient_mock, clock
+):
+    """If Frigate answers 200 to the revalidation, the new body wins."""
+    url = f"{FRIGATE_URL}/theme.css"
+    headers = {"Cache-Control": "public, max-age=60", "Content-Type": "text/css"}
+    aioclient_mock.get(url, content=b"old", headers={**headers, "ETag": '"v1"'})
+    client = await hass_client()
+    path = f"{base(setup_entry)}/theme.css"
+    await client.get(path)
+    await hass.async_block_till_done()  # the cache write trails the response
+
+    clock.advance(120)
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(url, content=b"new", headers={**headers, "ETag": '"v2"'})
+
+    assert await (await client.get(path)).read() == b"new"
+    assert await (await client.get(path)).read() == b"new"
+    assert len(aioclient_mock.mock_calls) == 1
+
+
+async def test_concurrent_misses_share_one_upstream_fetch(
+    hass, setup_entry, hass_client, aioclient_mock
+):
+    """A grid of tiles asking for one thumbnail should hit Frigate once."""
+    url = f"{FRIGATE_URL}/api/events/1700000000.1-abc/thumbnail.jpg"
+    aioclient_mock.get(url, content=b"\xff\xd8jpeg", headers=NO_HEADERS_AT_ALL)
+    client = await hass_client()
+    path = f"{base(setup_entry)}/api/events/1700000000.1-abc/thumbnail.jpg"
+
+    responses = await asyncio.gather(*(client.get(path) for _ in range(5)))
+
+    assert [await r.read() for r in responses] == [b"\xff\xd8jpeg"] * 5
+    assert len(aioclient_mock.mock_calls) == 1
+
+
 async def test_no_store_response_is_never_cached(
     hass, setup_entry, hass_client, aioclient_mock
 ):
@@ -279,3 +369,23 @@ async def test_unknown_entry_is_not_proxied(
     client = await hass_client()
     response = await client.get(f"{PROXY_BASE}/{stale_entry_id}/api/config")
     assert response.status in (401, 404)
+
+
+async def test_client_etag_gets_a_304_from_the_cache(
+    hass, setup_entry, hass_client, aioclient_mock
+):
+    """Browsers revalidating a cached entity are answered without a body."""
+    url = f"{FRIGATE_URL}/theme.css"
+    headers = {
+        "Cache-Control": "public, max-age=60",
+        "Content-Type": "text/css",
+        "ETag": '"v1"',
+    }
+    aioclient_mock.get(url, content=b"body{}", headers=headers)
+    client = await hass_client()
+    path = f"{base(setup_entry)}/theme.css"
+    await client.get(path)
+    await hass.async_block_till_done()
+
+    response = await client.get(path, headers={"If-None-Match": '"v1"'})
+    assert response.status == 304

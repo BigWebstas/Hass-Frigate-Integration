@@ -148,3 +148,22 @@ def test_key_varies_by_namespace_and_query():
         "e", "api/events", "camera=back"
     )
     assert cache_key("e", "api/config", "") == cache_key("e", "api/config", "")
+
+
+def test_expired_entry_with_etag_is_kept_for_revalidation(cache):
+    """An ETag lets an expired entry be renewed instead of refetched."""
+    key = "e" * 64
+    cache.write(key, 200, {**HEADERS, "ETag": '"v1"'}, b"body", ttl=0)
+    time.sleep(0.01)
+    stored = cache.read(key, allow_stale=True)
+    assert stored is not None
+    assert not stored.fresh
+    assert cache.read(key) is None
+
+
+def test_expired_entry_without_etag_is_dropped_even_when_stale_allowed(cache):
+    """Nothing to revalidate against means nothing worth keeping."""
+    key = "f" * 64
+    cache.write(key, 200, HEADERS, b"body", ttl=0)
+    time.sleep(0.01)
+    assert cache.read(key, allow_stale=True) is None

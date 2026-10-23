@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -23,6 +24,8 @@ class PanelData:
     event_media_ttl: int
     cache: DiskCache
     sessions: SessionStore
+    # Cache keys with a fetch under way, so concurrent misses share one fetch.
+    inflight: dict[str, asyncio.Event] = field(default_factory=dict)
 
     @property
     def namespace(self) -> str:

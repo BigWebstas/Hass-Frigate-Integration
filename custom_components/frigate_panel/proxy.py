@@ -11,7 +11,10 @@ and are accumulated on the side, so caching never adds latency to a miss.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from dataclasses import replace
+from functools import partial
 from http import HTTPStatus
 from ipaddress import ip_address
 from typing import TYPE_CHECKING, Any
@@ -31,7 +34,7 @@ from homeassistant.helpers.http import KEY_AUTHENTICATED, HomeAssistantView
 from homeassistant.util.ssl import get_default_context, get_default_no_verify_context
 from multidict import CIMultiDict
 
-from .cache import Stored, cache_key
+from .cache import Stored, cache_key, etag_of
 from .const import COOKIE_NAME, MAX_ENTRY_BYTES, PROXY_BASE
 from .rules import Policy, Tier, classify, forbids_storage, parse_cache_control
 
@@ -258,16 +261,60 @@ class FrigateProxyView(WebsocketProxyView):
             return await self._relay(request, proxied)
 
         key = cache_key(data.namespace, path, request.query_string)
-        stored = await data.hass.async_add_executor_job(data.cache.read, key)
-        if stored is not None:
-            if _client_holds_entity(request, stored.headers):
-                return web.Response(
-                    status=HTTPStatus.NOT_MODIFIED,
-                    headers=_hit_headers(stored.headers, stored.age, policy.ttl),
-                )
-            return _cached_response(request, stored, policy)
+        stored = await self._read(data, key)
 
-        return await self._fetch_and_cache(request, proxied, policy, key, data)
+        # Concurrent misses for one key (a grid of tiles all wanting the same
+        # thumbnail) share a single upstream fetch: the first request fetches
+        # and caches, the rest wait and then read the result. A waiter that
+        # still finds nothing usable (uncacheable, or the fetch failed) fetches
+        # for itself rather than queueing behind the others.
+        leader = False
+        if stored is None or not stored.fresh:
+            pending = data.inflight.get(key)
+            if pending is not None:
+                await pending.wait()
+                stored = await self._read(data, key)
+            else:
+                leader = True
+
+        if stored is not None and stored.fresh:
+            return self._serve(request, stored, policy)
+
+        if not leader:
+            return await self._fetch_and_cache(
+                request, proxied, policy=policy, key=key, data=data
+            )
+
+        done = data.inflight[key] = asyncio.Event()
+        try:
+            # A fetch that finished while our first read was in flight has
+            # written its result by now; look again before going upstream.
+            stored = await self._read(data, key) or stored
+            if stored is not None and stored.fresh:
+                return self._serve(request, stored, policy)
+            return await self._fetch_and_cache(
+                request, proxied, policy=policy, key=key, data=data, stale=stored
+            )
+        finally:
+            del data.inflight[key]
+            done.set()
+
+    @staticmethod
+    async def _read(data: PanelData, key: str) -> Stored | None:
+        """Read the cache without blocking the event loop."""
+        return await data.hass.async_add_executor_job(
+            partial(data.cache.read, key, allow_stale=True)
+        )
+
+    @staticmethod
+    def _serve(request: web.Request, stored: Stored, policy: Policy) -> web.Response:
+        """Answer from a cache entry, honouring the client's own validators."""
+        if _client_holds_entity(request, stored.headers):
+            return web.Response(
+                status=HTTPStatus.NOT_MODIFIED,
+                headers=_hit_headers(stored.headers, stored.age, policy.ttl),
+            )
+        return _cached_response(request, stored, policy)
 
     async def _relay(
         self, request: web.Request, proxied: ProxiedURL
@@ -290,16 +337,36 @@ class FrigateProxyView(WebsocketProxyView):
                 _LOGGER.debug("Stream ended for %s: %s", request.rel_url, err)
             return response
 
-    async def _fetch_and_cache(
+    async def _fetch_and_cache(  # noqa: PLR0913
         self,
         request: web.Request,
         proxied: ProxiedURL,
+        *,
         policy: Policy,
         key: str,
         data: PanelData,
+        stale: Stored | None = None,
     ) -> web.StreamResponse:
-        """Stream a response to the client, caching it on the way past."""
-        async with self._open_upstream(request, proxied) as result:
+        """Stream a response to the client, caching it on the way past.
+
+        Given an expired entry, ask Frigate whether it is still current first;
+        a 304 renews the entry and saves re-downloading the body.
+        """
+        revalidate = etag_of(stale.headers) if stale is not None else None
+        async with self._open_upstream(request, proxied, revalidate) as result:
+            if stale is not None and result.status == HTTPStatus.NOT_MODIFIED:
+                ttl = _ttl_for(result, policy, revalidated=True)
+                if ttl is not None:
+                    await data.hass.async_add_executor_job(
+                        data.cache.write,
+                        key,
+                        stale.status,
+                        stale.headers,
+                        stale.body,
+                        ttl,
+                    )
+                return self._serve(request, replace(stale, age=0), policy)
+
             ttl = _ttl_for(result, policy)
             buffer: bytearray | None = bytearray() if ttl is not None else None
 
@@ -344,12 +411,25 @@ class FrigateProxyView(WebsocketProxyView):
             )
         return response
 
-    def _open_upstream(self, request: web.Request, proxied: ProxiedURL) -> Any:
-        """Open the upstream request, streaming any request body through."""
+    def _open_upstream(
+        self,
+        request: web.Request,
+        proxied: ProxiedURL,
+        revalidate: str | None = None,
+    ) -> Any:
+        """Open the upstream request, streaming any request body through.
+
+        ``revalidate`` is a cached ETag to check; it replaces whatever
+        conditional headers the client sent, since the answer is for us.
+        """
+        headers = _upstream_headers(request, proxied.headers)
+        if revalidate:
+            headers.popall(hdrs.IF_MODIFIED_SINCE, None)
+            headers[hdrs.IF_NONE_MATCH] = revalidate
         return self._websession.request(
             request.method,
             proxied.url,
-            headers=_upstream_headers(request, proxied.headers),
+            headers=headers,
             params=proxied.query_params,
             allow_redirects=False,
             data=request.content if request.can_read_body else None,
@@ -431,9 +511,16 @@ def _storable_headers(result: aiohttp.ClientResponse) -> dict[str, str]:
     return headers
 
 
-def _ttl_for(result: aiohttp.ClientResponse, policy: Policy) -> int | None:
-    """Decide how long to store a response, or None to not store it."""
-    if result.status != HTTPStatus.OK:
+def _ttl_for(
+    result: aiohttp.ClientResponse, policy: Policy, *, revalidated: bool = False
+) -> int | None:
+    """Decide how long to store a response, or None to not store it.
+
+    ``revalidated`` accepts a 304 answering our own conditional request, which
+    renews the entry already stored.
+    """
+    expected = HTTPStatus.NOT_MODIFIED if revalidated else HTTPStatus.OK
+    if result.status != expected:
         return None
     if hdrs.SET_COOKIE in result.headers:
         return None
@@ -461,7 +548,7 @@ def _ttl_for(result: aiohttp.ClientResponse, policy: Policy) -> int | None:
 
 def _client_holds_entity(request: web.Request, stored: dict[str, str]) -> bool:
     """Report whether the client's If-None-Match matches the cached entity."""
-    etag = stored.get(hdrs.ETAG)
+    etag = etag_of(stored)
     candidates = request.headers.get(hdrs.IF_NONE_MATCH, "")
     if not etag or not candidates:
         return False

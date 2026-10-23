@@ -45,6 +45,11 @@ def cache_key(namespace: str, path: str, query: str) -> str:
     ).hexdigest()
 
 
+def etag_of(headers: dict[str, str]) -> str | None:
+    """Find the ETag in stored headers, which keep the case upstream sent."""
+    return next((v for k, v in headers.items() if k.lower() == "etag"), None)
+
+
 @dataclass(frozen=True)
 class Stored:
     """A response read back out of the cache."""
@@ -54,6 +59,7 @@ class Stored:
     body: bytes
     stored_at: float
     age: int
+    fresh: bool = True
 
 
 class DiskCache:
@@ -93,8 +99,12 @@ class DiskCache:
             self._sizes = sizes
         self._evict()
 
-    def read(self, key: str) -> Stored | None:
-        """Return a fresh entry, or None on miss or expiry."""
+    def read(self, key: str, *, allow_stale: bool = False) -> Stored | None:
+        """Return a fresh entry, or None on miss or expiry.
+
+        With ``allow_stale`` an expired entry is kept and returned (``fresh``
+        False) when it carries an ETag the caller can revalidate against.
+        """
         path = self._path(key)
         try:
             with path.open("rb") as handle:
@@ -110,7 +120,8 @@ class DiskCache:
 
         stored_at = float(meta["stored_at"])
         age = time.time() - stored_at
-        if age > float(meta["ttl"]):
+        fresh = age <= float(meta["ttl"])
+        if not fresh and not (allow_stale and etag_of(meta["headers"])):
             self._discard(key)
             return None
 
@@ -125,6 +136,7 @@ class DiskCache:
             body=body,
             stored_at=stored_at,
             age=max(0, int(age)),
+            fresh=fresh,
         )
 
     def write(
