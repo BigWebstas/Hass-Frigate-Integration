@@ -15,6 +15,14 @@
 
 const PROBE_TIMEOUT_MS = 1500;
 const IFRAME_LOAD_TIMEOUT_MS = 5000;
+// Renew a little early so a session never lapses between the check and use.
+const SESSION_MARGIN_S = 60;
+
+// proxy_base -> when its session cookie stops being valid (ms). Module-level,
+// so it outlives the panel element and switching away and back reuses it.
+// The cookie itself is HttpOnly, so this is the only record the page has.
+const sessionExpiry = new Map();
+let watchingConnection = false;
 
 class FrigatePanel extends HTMLElement {
   constructor() {
@@ -116,7 +124,15 @@ class FrigatePanel extends HTMLElement {
   async _connect() {
     const config = this._panel.config || {};
 
-    // Run concurrently: neither depends on the other, and loading the
+    // The iframe and everything it loads authenticate with a cookie, because
+    // a browser cannot attach an Authorization header to its own asset
+    // requests. Start getting it now rather than after the direct-vs-proxy
+    // answer: it does not depend on it, and when direct wins it is a single
+    // wasted request that a later open will not repeat.
+    const session = this._ensureSession(config.proxy_base);
+    session.catch(() => {}); // Reported below, only if the proxy is used.
+
+    // Run concurrently: none depends on the others, and loading the
     // toolbar's component is a network fetch worth overlapping with the
     // direct-vs-proxy probe rather than adding to the wait.
     const [mode, subpage] = await Promise.all([
@@ -126,10 +142,7 @@ class FrigatePanel extends HTMLElement {
     this._attachLayout(subpage);
 
     if (mode === "proxy") {
-      // The iframe and everything it loads authenticate with a cookie, because
-      // a browser cannot attach an Authorization header to its own asset
-      // requests. Mint it before loading anything.
-      await this._mintSession(config.proxy_base);
+      await session;
     }
 
     this._mode = mode;
@@ -257,6 +270,28 @@ class FrigatePanel extends HTMLElement {
     }
   }
 
+  /** Mint a session unless one we made is still good. */
+  async _ensureSession(proxyBase) {
+    this._watchConnection();
+    if ((sessionExpiry.get(proxyBase) || 0) > Date.now()) {
+      return;
+    }
+    await this._mintSession(proxyBase);
+  }
+
+  /**
+   * Forget remembered sessions when Home Assistant reconnects: a restart or
+   * integration reload drops them server-side, and reusing the memory then
+   * would load the iframe unauthenticated.
+   */
+  _watchConnection() {
+    if (watchingConnection) {
+      return;
+    }
+    watchingConnection = true;
+    this._hass.connection.addEventListener("ready", () => sessionExpiry.clear());
+  }
+
   async _mintSession(proxyBase) {
     const post = (token) =>
       fetch(`${proxyBase}/-/session`, {
@@ -274,6 +309,8 @@ class FrigatePanel extends HTMLElement {
     if (!response.ok) {
       throw new Error(`session request returned ${response.status}`);
     }
+    const { ttl } = await response.json();
+    sessionExpiry.set(proxyBase, Date.now() + (ttl - SESSION_MARGIN_S) * 1000);
   }
 
   _load(src, mode, config) {
@@ -295,7 +332,7 @@ class FrigatePanel extends HTMLElement {
       if (mode === "direct") {
         sessionStorage.removeItem(`frigate-panel:mode:${config.direct_url}`);
         this._overlay.textContent = "Frigate not reachable directly, retrying…";
-        this._mintSession(config.proxy_base)
+        this._ensureSession(config.proxy_base)
           .then(() => this._load(`${config.proxy_base}/`, "proxy", config))
           .catch((err) => this._fail(`Could not open Frigate: ${err.message}`));
       } else {
